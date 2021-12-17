@@ -23,9 +23,10 @@ class Pane(Static):
         self.pos = pos
 
 class PaneLayout(Layout):
-    def __init__(self) -> None:
+    def __init__(self, scale: float) -> None:
         super().__init__()
         self.panes: List[Pane] = []
+        self.scale = scale
 
     def add_pane(self, pane: Pane):
         self.panes.append(pane)
@@ -36,7 +37,12 @@ class PaneLayout(Layout):
     def arrange(self, size: Size, scroll: Offset) -> Iterable[WidgetPlacement]:
         placements = []
         for pane in self.panes:
-            region = Region.from_corners(pane.pos.col_start, pane.pos.row_start, pane.pos.col_end, pane.pos.row_end)
+            x1 = round(pane.pos.col_start * self.scale)
+            y1 = pane.pos.row_start
+            x2 = round(pane.pos.col_end * self.scale)
+            y2 = pane.pos.row_end
+            # crop any overflowing content
+            region = Region.from_corners(x1, y1, x2, y2).intersection(size.region)
             placements.append(WidgetPlacement(region, pane))
         return placements
 
@@ -47,15 +53,15 @@ class MyApp(App):
         await self.bind("q", "quit", "Quit")
 
     async def on_mount(self, event: events.Mount) -> None:
-        layout = PaneLayout()
+        layout = PaneLayout(0.8)
         layout_str = subprocess.getoutput("tmux display-message -p -F '#{window_visible_layout}' -t lila:0")
         layouts = parse_layout(layout_str)
         for l in layouts:
             pane_content = subprocess.getoutput(f"tmux capture-pane -t {l.pane_id} -epN")
-            layout.add_pane(Pane(l, Text.from_ansi(pane_content)))
-        layout.require_update()
+            layout.add_pane(Pane(l, Text.from_ansi(pane_content, no_wrap=True, end="")))
         view = View(layout, name="panes")
-        await self.view.dock(view, edge="right", size=50)
-        # await self.view.dock(Placeholder(), edge="left", size=50)
+        left = round(self.console.size.width * 0.2)
+        await self.view.dock(Placeholder(), edge="left", size=left)
+        await self.view.dock(view, edge="right")
 
 MyApp.run(title="Simple App", log="textual.log")
