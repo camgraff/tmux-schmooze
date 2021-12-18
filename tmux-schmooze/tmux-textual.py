@@ -1,12 +1,15 @@
+import string
+from rich.control import Control
+from rich.segment import ControlType
 from .tmux import GridArea, parse_layout
 from logging import PlaceHolder
 from typing import Iterable, List
-import rich
 from rich.console import RenderableType
 from rich.markdown import Markdown
 from rich.padding import PaddingDimensions
 from rich.style import StyleType
 from rich.text import Text
+from rich.panel import Panel
 import subprocess
 from textual import events
 from textual.app import App
@@ -16,6 +19,43 @@ from textual.view import View
 from textual.widget import Widget
 from textual.widgets import Static
 from textual.widgets import Placeholder
+
+class TextInput(Widget):
+    def __init__(self, name: str | None = None) -> None:
+        super().__init__(name=name)
+        self.value = ""
+        self._cursor_position = 0
+
+    def render(self) -> RenderableType:
+        return Panel(self.value)
+
+    async def on_key(self, event: events.Key) -> None:
+        if event.key == "left":
+            self._cursor_position = max(0, self._cursor_position-1)
+        elif event.key == "right":
+            self._cursor_position = min(len(self.value), self._cursor_position+1)
+        elif event.key == "home":
+            self._cursor_position = 0
+        elif event.key == "end":
+            self._cursor_position = len(self.value)
+        elif event.key == "ctrl+h":  # Backspace
+            if self.value and self._cursor_position > 0:
+                self.value = self.value[:self._cursor_position-1] + self.value[self._cursor_position:]
+                self._cursor_position -= 1
+        elif event.key == "delete":
+            if self.value and self._cursor_position < len(self.value):
+                self.value = self.value[:self._cursor_position] + self.value[self._cursor_position+1:]
+        elif event.key in string.printable:
+            self.value += event.key
+            self._cursor_position += 1
+        self.refresh()
+
+    def __rich__(self) -> RenderableType:
+        self.console.show_cursor()
+        # FIXME: Not working
+        self.console.control(Control.move_to(0, 0))
+        return super().__rich__()
+
 
 class Pane(Static):
     def __init__(self, pos: GridArea, text: Text) -> None:
@@ -37,6 +77,7 @@ class PaneLayout(Layout):
     def arrange(self, size: Size, scroll: Offset) -> Iterable[WidgetPlacement]:
         placements = []
         for pane in self.panes:
+            # This assumes horizontal scaling only
             x1 = round(pane.pos.col_start * self.scale)
             y1 = pane.pos.row_start
             x2 = round(pane.pos.col_end * self.scale)
@@ -47,10 +88,15 @@ class PaneLayout(Layout):
         return placements
 
 class MyApp(App):
+    async def on_key(self, event: events.Key) -> None:
+        await super().on_key(event)
+        await self.input.on_key(event)
+
     async def on_load(self, event: events.Load) -> None:
         """Bind keys with the app loads (but before entering application mode)"""
         await self.bind("b", "view.toggle('sidebar')", "Toggle sidebar")
         await self.bind("q", "quit", "Quit")
+        self.input = TextInput()
 
     async def on_mount(self, event: events.Mount) -> None:
         layout = PaneLayout(0.8)
@@ -61,7 +107,7 @@ class MyApp(App):
             layout.add_pane(Pane(l, Text.from_ansi(pane_content, no_wrap=True, end="")))
         view = View(layout, name="panes")
         left = round(self.console.size.width * 0.2)
-        await self.view.dock(Placeholder(), edge="left", size=left)
+        await self.view.dock(self.input, edge="left", size=left)
         await self.view.dock(view, edge="right")
 
 MyApp.run(title="Simple App", log="textual.log")
