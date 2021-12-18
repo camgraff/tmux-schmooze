@@ -1,6 +1,6 @@
 import string
 from rich.control import Control
-from rich.segment import ControlType
+from rich.segment import ControlType, Segment, Segments
 from textual.layouts.dock import Dock
 from textual.message import Message
 from .tmux import GridArea, parse_layout
@@ -9,7 +9,7 @@ from typing import Iterable, List
 from rich.console import RenderableType
 from rich.markdown import Markdown
 from rich.padding import PaddingDimensions
-from rich.style import StyleType
+from rich.style import Style, StyleType
 from rich.text import Text
 from rich.panel import Panel
 import subprocess
@@ -51,14 +51,27 @@ class FuzzyFinder(DockView):
 class Picker(Widget):
     def __init__(self, name: str | None = None) -> None:
         super().__init__(name=name)
-        self.entries = []
+        self._entries = []
+        self.selected_entry = 0
+
+    async def on_key(self, event: events.Key):
+        if event.key == "up":
+            self.selected_entry = (self.selected_entry-1) % len(self._entries)
+        elif event.key == "down":
+            self.selected_entry = (self.selected_entry+1) % len(self._entries)
+        self.refresh()
 
     def set_entries(self, entries: Iterable[str]):
-        self.entries = entries
+        self._entries = entries
+        self.selected_entry = 0
         self.refresh()
 
     def render(self) -> RenderableType:
-        return Panel("\n".join(self.entries))
+        # TODO: Change bgcolor to something more visisble
+        texts = [Text(x, Style(bgcolor="white") if i == self.selected_entry else "") for i, x in enumerate(self._entries)]
+        joiner = Text("\n")
+        res = joiner.join(texts)
+        return Panel(res)
 
 class TextInput(Widget):
     def __init__(self, name: str | None = None) -> None:
@@ -66,9 +79,17 @@ class TextInput(Widget):
         self.prompt = ">> "
         self.value = ""
         self._cursor_position = 0
+        self.cursor = ("|", Style(blink=True, color="white", bold=True))
 
     def render(self) -> RenderableType:
-        return Panel(self.prompt + self.value)
+        segments = [
+            self.prompt,
+            self.value[:self._cursor_position],
+            self.cursor,
+            self.value[self._cursor_position:]
+        ]
+        text = Text.assemble(*segments)
+        return Panel(text)
 
     async def on_key(self, event: events.Key) -> None:
         if event.key == "left":
@@ -83,21 +104,16 @@ class TextInput(Widget):
             if self.value and self._cursor_position > 0:
                 self.value = self.value[:self._cursor_position-1] + self.value[self._cursor_position:]
                 self._cursor_position -= 1
+            await self.emit(InputChanged(self, self.value))
         elif event.key == "delete":
             if self.value and self._cursor_position < len(self.value):
                 self.value = self.value[:self._cursor_position] + self.value[self._cursor_position+1:]
+            await self.emit(InputChanged(self, self.value))
         elif event.key in string.printable:
             self.value += event.key
             self._cursor_position += 1
-        await self.emit(InputChanged(self, self.value))
+            await self.emit(InputChanged(self, self.value))
         self.refresh()
-
-    def __rich__(self) -> RenderableType:
-        self.console.show_cursor()
-        # FIXME: Not working
-        self.console.control(Control.move_to(0, 0))
-        return super().__rich__()
-
 
 class Pane(Static):
     def __init__(self, pos: GridArea, text: Text) -> None:
@@ -133,6 +149,7 @@ class MyApp(App):
     async def on_key(self, event: events.Key) -> None:
         await super().on_key(event)
         await self.fuzzy_finder.input.on_key(event)
+        await self.fuzzy_finder.picker.on_key(event)
 
     async def on_load(self, event: events.Load) -> None:
         """Bind keys with the app loads (but before entering application mode)"""
