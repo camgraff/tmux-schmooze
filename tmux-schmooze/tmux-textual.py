@@ -36,10 +36,11 @@ class FuzzyFinder(DockView):
         self.picker = Picker()
         self.input = TextInput()
         self.candidates = candidates
+        self.picker.set_entries(candidates)
 
     async def handle_input_changed(self, event: InputChanged):
         res = fuzzyfinder(event.value, self.candidates)
-        print(list(res))
+        self.picker.set_entries(list(res))
 
     async def on_mount(self, event: events.Mount) -> None:
         await self.dock(self.picker, edge="top", size=round(self.console.height*0.9))
@@ -48,9 +49,16 @@ class FuzzyFinder(DockView):
 
 
 class Picker(Widget):
+    def __init__(self, name: str | None = None) -> None:
+        super().__init__(name=name)
+        self.entries = []
+
+    def set_entries(self, entries: Iterable[str]):
+        self.entries = entries
+        self.refresh()
 
     def render(self) -> RenderableType:
-        return super().render()
+        return Panel("\n".join(self.entries))
 
 class TextInput(Widget):
     def __init__(self, name: str | None = None) -> None:
