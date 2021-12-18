@@ -23,11 +23,12 @@ from textual.widgets import Placeholder
 class TextInput(Widget):
     def __init__(self, name: str | None = None) -> None:
         super().__init__(name=name)
+        self.prompt = ">> "
         self.value = ""
         self._cursor_position = 0
 
     def render(self) -> RenderableType:
-        return Panel(self.value)
+        return Panel(self.prompt + self.value)
 
     async def on_key(self, event: events.Key) -> None:
         if event.key == "left":
@@ -99,15 +100,31 @@ class MyApp(App):
         self.input = TextInput()
 
     async def on_mount(self, event: events.Mount) -> None:
+        left = round(self.console.size.width * 0.2)
+        grid = await self.view.dock_grid()
+        grid.add_column("left", size=left)
+        grid.add_column("right")
+        grid.add_row("top", size=round(self.console.height*0.9))
+        grid.add_row("bottom")
+
+        grid.add_areas(
+            picker="left,top",
+            text_input="left,bottom",
+            panes="right,top-start|bottom-end"
+        )
+
         layout = PaneLayout(0.8)
         layout_str = subprocess.getoutput("tmux display-message -p -F '#{window_visible_layout}' -t lila:0")
         layouts = parse_layout(layout_str)
         for l in layouts:
             pane_content = subprocess.getoutput(f"tmux capture-pane -t {l.pane_id} -epN")
             layout.add_pane(Pane(l, Text.from_ansi(pane_content, no_wrap=True, end="")))
-        view = View(layout, name="panes")
-        left = round(self.console.size.width * 0.2)
-        await self.view.dock(self.input, edge="left", size=left)
-        await self.view.dock(view, edge="right")
+        panes = View(layout, name="panes")
+        # TODO: Figure out how to keep the proportions on window resize
+        grid.place(
+            picker=Placeholder(),
+            text_input=self.input,
+            panes=panes
+        )
 
 MyApp.run(title="Simple App", log="textual.log")
