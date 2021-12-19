@@ -38,11 +38,16 @@ class FuzzyFinder(DockView):
         self.candidates = candidates
         self.picker.set_entries(candidates)
 
+    async def on_key(self, event: events.Key):
+        await self.input.on_key(event)
+        await self.picker.on_key(event)
+
     async def handle_input_changed(self, event: InputChanged):
         res = fuzzyfinder(event.value, self.candidates)
         self.picker.set_entries(list(res))
 
     async def on_mount(self, event: events.Mount) -> None:
+        await self.focus()
         await self.dock(self.picker, edge="top", size=round(self.console.height*0.9))
         await self.dock(self.input, edge="bottom")
         return await super().on_mount(event)
@@ -51,7 +56,7 @@ class FuzzyFinder(DockView):
 class Picker(Widget):
     def __init__(self, name: str | None = None) -> None:
         super().__init__(name=name)
-        self._entries = []
+        self._entries: List[str] = []
         self.selected_entry = 0
 
     async def on_key(self, event: events.Key):
@@ -61,7 +66,7 @@ class Picker(Widget):
             self.selected_entry = (self.selected_entry+1) % len(self._entries)
         self.refresh()
 
-    def set_entries(self, entries: Iterable[str]):
+    def set_entries(self, entries: List[str]):
         self._entries = entries
         self.selected_entry = 0
         self.refresh()
@@ -146,14 +151,7 @@ class PaneLayout(Layout):
         return placements
 
 class MyApp(App):
-    async def on_key(self, event: events.Key) -> None:
-        await super().on_key(event)
-        await self.fuzzy_finder.input.on_key(event)
-        await self.fuzzy_finder.picker.on_key(event)
-
     async def on_load(self, event: events.Load) -> None:
-        """Bind keys with the app loads (but before entering application mode)"""
-        await self.bind("q", "quit", "Quit")
         sessions = subprocess.getoutput("tmux list-sessions -F '#S'").splitlines()
         self.fuzzy_finder = FuzzyFinder(sessions)
 
