@@ -1,12 +1,13 @@
 import string
 from rich.control import Control
 from rich.segment import ControlType, Segment, Segments
+from textual.driver import Driver
 from textual.layouts.dock import Dock
 from textual.message import Message
-from .tmux import GridArea, parse_layout
+from .tmux import get_layout, PaneArea
 from logging import PlaceHolder
-from typing import Iterable, List
-from rich.console import RenderableType
+from typing import Iterable, List, Type
+from rich.console import Console, RenderableType
 from rich.markdown import Markdown
 from rich.padding import PaddingDimensions
 from rich.style import Style, StyleType
@@ -30,13 +31,17 @@ class InputChanged(Message):
         self.value = value
         super().__init__(sender)
 
+class SelectedEntryChanged(Message):
+    def __init__(self, sender: MessageTarget, value: str) -> None:
+        self.value = value
+        super().__init__(sender)
+
 class FuzzyFinder(DockView):
     def __init__(self, candidates: List[str], name: str | None = None) -> None:
         super().__init__(name=name)
         self.picker = Picker()
         self.input = TextInput()
         self.candidates = candidates
-        self.picker.set_entries(candidates)
 
     async def on_key(self, event: events.Key):
         await self.input.on_key(event)
@@ -44,9 +49,10 @@ class FuzzyFinder(DockView):
 
     async def handle_input_changed(self, event: InputChanged):
         res = fuzzyfinder(event.value, self.candidates)
-        self.picker.set_entries(list(res))
+        await self.picker.set_entries(list(res))
 
     async def on_mount(self, event: events.Mount) -> None:
+        await self.picker.set_entries(self.candidates)
         await self.focus()
         await self.dock(self.picker, edge="top", size=round(self.console.height*0.9))
         await self.dock(self.input, edge="bottom")
@@ -62,13 +68,16 @@ class Picker(Widget):
     async def on_key(self, event: events.Key):
         if event.key == "up":
             self.selected_entry = (self.selected_entry-1) % len(self._entries)
+            await self.emit(SelectedEntryChanged(self, self._entries[self.selected_entry]))
         elif event.key == "down":
             self.selected_entry = (self.selected_entry+1) % len(self._entries)
+            await self.emit(SelectedEntryChanged(self, self._entries[self.selected_entry]))
         self.refresh()
 
-    def set_entries(self, entries: List[str]):
+    async def set_entries(self, entries: List[str]):
         self._entries = entries
         self.selected_entry = 0
+        await self.emit(SelectedEntryChanged(self, self._entries[self.selected_entry]))
         self.refresh()
 
     def render(self) -> RenderableType:
@@ -121,7 +130,7 @@ class TextInput(Widget):
         self.refresh()
 
 class Pane(Static):
-    def __init__(self, pos: GridArea, text: Text) -> None:
+    def __init__(self, pos: PaneArea, text: Text) -> None:
         super().__init__(text)
         self.pos = pos
 
@@ -130,6 +139,10 @@ class PaneLayout(Layout):
         super().__init__()
         self.panes: List[Pane] = []
         self.scale = scale
+    
+    def reset(self) -> None:
+        self.panes = []
+        return super().reset()
 
     def add_pane(self, pane: Pane):
         self.panes.append(pane)
@@ -151,20 +164,28 @@ class PaneLayout(Layout):
         return placements
 
 class MyApp(App):
-    async def on_load(self, event: events.Load) -> None:
+    def __init__(self, console: Console | None = None, screen: bool = True, driver_class: Type[Driver] | None = None, log: str = "", log_verbosity: int = 1, title: str = "Textual Application"):
+        super().__init__(console=console, screen=screen, driver_class=driver_class, log=log, log_verbosity=log_verbosity, title=title)
         sessions = subprocess.getoutput("tmux list-sessions -F '#S'").splitlines()
         self.fuzzy_finder = FuzzyFinder(sessions)
+        self.panes = View(PaneLayout(0.8), name="panes")
+        
+    async def handle_selected_entry_changed(self, event: SelectedEntryChanged):
+        self.panes.layout.reset()
+        self.set_layout(event.value)
+        await self.panes.refresh_layout()
+
+    def set_layout(self, id: str):
+        layout = get_layout(id)
+        for area in layout:
+            pane_content = subprocess.getoutput(f"tmux capture-pane -t {area.pane_id} -epN")
+            self.panes.layout.add_pane(Pane(area, Text.from_ansi(pane_content, no_wrap=True, end="")))
 
     async def on_mount(self, event: events.Mount) -> None:
-        layout = PaneLayout(0.8)
-        layout_str = subprocess.getoutput("tmux display-message -p -F '#{window_visible_layout}' -t lila:0")
-        layouts = parse_layout(layout_str)
-        for l in layouts:
-            pane_content = subprocess.getoutput(f"tmux capture-pane -t {l.pane_id} -epN")
-            layout.add_pane(Pane(l, Text.from_ansi(pane_content, no_wrap=True, end="")))
-        panes = View(layout, name="panes")
+        # TODO: This should be initialized via an event
+        self.set_layout("lila:0")
         # TODO: Figure out how to keep the proportions on window resize
         await self.view.dock(self.fuzzy_finder, edge="left", size=round(self.console.size.width * 0.2))
-        await self.view.dock(panes, edge="right")
+        await self.view.dock(self.panes, edge="right")
 
 MyApp.run(title="Simple App", log="textual.log")
