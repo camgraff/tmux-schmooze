@@ -4,7 +4,7 @@ from rich.segment import ControlType, Segment, Segments
 from textual.driver import Driver
 from textual.layouts.dock import Dock
 from textual.message import Message
-from .tmux import get_layout, PaneArea
+from . import tmux
 from logging import PlaceHolder
 from typing import Iterable, List, Type
 from rich.console import Console, RenderableType
@@ -130,7 +130,7 @@ class TextInput(Widget):
         self.refresh()
 
 class Pane(Static):
-    def __init__(self, pos: PaneArea, text: Text) -> None:
+    def __init__(self, pos: tmux.PaneArea, text: Text) -> None:
         super().__init__(text)
         self.pos = pos
 
@@ -163,10 +163,10 @@ class PaneLayout(Layout):
             placements.append(WidgetPlacement(region, pane))
         return placements
 
-class MyApp(App):
-    def __init__(self, console: Console | None = None, screen: bool = True, driver_class: Type[Driver] | None = None, log: str = "", log_verbosity: int = 1, title: str = "Textual Application"):
+class UI(App):
+    def __init__(self, target_type: str, console: Console | None = None, screen: bool = True, driver_class: Type[Driver] | None = None, log: str = "", log_verbosity: int = 1, title: str = "Textual Application"):
         super().__init__(console=console, screen=screen, driver_class=driver_class, log=log, log_verbosity=log_verbosity, title=title)
-        sessions = subprocess.getoutput("tmux list-sessions -F '#S'").splitlines()
+        sessions = subprocess.getoutput(f"tmux list-{target_type} -F '#S'").splitlines()
         self.fuzzy_finder = FuzzyFinder(sessions)
         self.panes = View(PaneLayout(0.8), name="panes")
         
@@ -176,7 +176,7 @@ class MyApp(App):
         await self.panes.refresh_layout()
 
     def set_layout(self, id: str):
-        layout = get_layout(id)
+        layout = tmux.get_layout(id)
         for area in layout:
             pane_content = subprocess.getoutput(f"tmux capture-pane -t {area.pane_id} -epN")
             self.panes.layout.add_pane(Pane(area, Text.from_ansi(pane_content, no_wrap=True, end="")))
@@ -188,4 +188,5 @@ class MyApp(App):
         await self.view.dock(self.fuzzy_finder, edge="left", size=round(self.console.size.width * 0.2))
         await self.view.dock(self.panes, edge="right")
 
-MyApp.run(title="Simple App", log="textual.log")
+if __name__ == "__main__":
+    UI.run(title="tmux schmooze", log="textual.log")
