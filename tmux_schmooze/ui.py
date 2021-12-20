@@ -181,13 +181,15 @@ class UI(App):
     async def handle_selected_entry_changed(self, event: SelectedEntryChanged):
         self.panes.layout.reset()
         self.set_layout(event.value.id)
+        # Have to refresh the view and layout for things to work properly
+        self.panes.refresh(True, True)
         await self.panes.refresh_layout()
 
-    def set_layout(self, id: str):
-        layout = tmux.get_layout(id)
-        for area in layout:
-            pane_content = subprocess.getoutput(f"tmux capture-pane -t {area.pane_id} -epN")
-            cast(PaneLayout, self.panes.layout).add_pane(Pane(area, Text.from_ansi(pane_content, no_wrap=True, end="")))
+    def set_layout(self, target_id: str):
+        layout = tmux.get_layout(target_id)
+        for pane in layout:
+            pane_content = tmux.capture_pane(pane.pane_id)
+            cast(PaneLayout, self.panes.layout).add_pane(Pane(pane, Text.from_ansi(pane_content, no_wrap=True, end="")))
 
     async def on_mount(self, event: events.Mount) -> None:
         # TODO: Figure out how to keep the proportions on window resize

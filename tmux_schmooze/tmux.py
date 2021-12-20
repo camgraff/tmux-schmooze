@@ -41,6 +41,9 @@ def list_targets(target_type: TargetType) -> List[Target]:
 def attach_session(session: str) -> None:
     subprocess.run(["tmux", "switch-client", "-t", session], check=True)
 
+def capture_pane(id: str) -> str:
+    return "\n".join(_cmd("capture-pane", "-t", id, "-epN"))
+
 def get_layout(id: str) -> List[PaneArea]:
     """
     Gets the window layout for the passed id.
