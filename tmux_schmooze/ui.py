@@ -52,11 +52,11 @@ class FuzzyFinder(DockView):
         await self.picker.set_entries(list(res))
 
     async def on_mount(self, event: events.Mount) -> None:
-        await self.picker.set_entries(self.candidates)
+        await super().on_mount(event)
         await self.focus()
         await self.dock(self.picker, edge="top", size=round(self.console.height*0.9))
         await self.dock(self.input, edge="bottom")
-        return await super().on_mount(event)
+        await self.picker.set_entries(self.candidates)
 
 
 class Picker(Widget):
@@ -182,8 +182,6 @@ class UI(App):
             self.panes.layout.add_pane(Pane(area, Text.from_ansi(pane_content, no_wrap=True, end="")))
 
     async def on_mount(self, event: events.Mount) -> None:
-        # TODO: This should be initialized via an event
-        self.set_layout("lila:0")
         # TODO: Figure out how to keep the proportions on window resize
         await self.view.dock(self.fuzzy_finder, edge="left", size=round(self.console.size.width * 0.2))
         await self.view.dock(self.panes, edge="right")
