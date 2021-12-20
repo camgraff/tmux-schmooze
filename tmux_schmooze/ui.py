@@ -6,7 +6,7 @@ from textual.layouts.dock import Dock
 from textual.message import Message
 from . import tmux
 from logging import PlaceHolder
-from typing import Iterable, List, Type
+from typing import Iterable, List, Optional, Type, cast
 from rich.console import Console, RenderableType
 from rich.markdown import Markdown
 from rich.padding import PaddingDimensions
@@ -63,26 +63,34 @@ class Picker(Widget):
     def __init__(self, name: str | None = None) -> None:
         super().__init__(name=name)
         self._entries: List[str] = []
-        self.selected_entry = 0
+        self._selected_entry_index = 0
+
+    @property
+    def selected_entry(self) -> Optional[str]:
+        if self._selected_entry_index < len(self._entries):
+            return self._entries[self._selected_entry_index]
 
     async def on_key(self, event: events.Key):
         if event.key == "up":
-            self.selected_entry = (self.selected_entry-1) % len(self._entries)
-            await self.emit(SelectedEntryChanged(self, self._entries[self.selected_entry]))
+            self._selected_entry_index = (self._selected_entry_index-1) % len(self._entries)
+            await self.emit(SelectedEntryChanged(self, self.selected_entry))
         elif event.key == "down":
-            self.selected_entry = (self.selected_entry+1) % len(self._entries)
-            await self.emit(SelectedEntryChanged(self, self._entries[self.selected_entry]))
+            self._selected_entry_index = (self._selected_entry_index+1) % len(self._entries)
+            await self.emit(SelectedEntryChanged(self, self.selected_entry))
+        elif event.key == "enter":
+            tmux.attach_session(self.selected_entry)
+
         self.refresh()
 
     async def set_entries(self, entries: List[str]):
         self._entries = entries
-        self.selected_entry = 0
-        await self.emit(SelectedEntryChanged(self, self._entries[self.selected_entry]))
+        self._selected_entry_index = 0
+        await self.emit(SelectedEntryChanged(self, self._entries[self._selected_entry_index]))
         self.refresh()
 
     def render(self) -> RenderableType:
         # TODO: Change bgcolor to something more visisble
-        texts = [Text(x, Style(bgcolor="white") if i == self.selected_entry else "") for i, x in enumerate(self._entries)]
+        texts = [Text(x, Style(bgcolor="white") if i == self._selected_entry_index else "") for i, x in enumerate(self._entries)]
         joiner = Text("\n")
         res = joiner.join(texts)
         return Panel(res)
@@ -179,7 +187,7 @@ class UI(App):
         layout = tmux.get_layout(id)
         for area in layout:
             pane_content = subprocess.getoutput(f"tmux capture-pane -t {area.pane_id} -epN")
-            self.panes.layout.add_pane(Pane(area, Text.from_ansi(pane_content, no_wrap=True, end="")))
+            cast(PaneLayout, self.panes.layout).add_pane(Pane(area, Text.from_ansi(pane_content, no_wrap=True, end="")))
 
     async def on_mount(self, event: events.Mount) -> None:
         # TODO: Figure out how to keep the proportions on window resize

@@ -9,15 +9,18 @@ class PaneArea(NamedTuple):
     row_end: int
     pane_id: str
 
+def attach_session(session: str) -> None:
+    subprocess.run(["tmux", "switch-client", "-t", session], check=True)
+
 def get_layout(id: str) -> List[PaneArea]:
     """
     Gets the window layout for the passed id.
     id can be a session or window ID.
     """
     layout_str = subprocess.getoutput(f"tmux display-message -p -F '#{{window_visible_layout}}' -t {id}")
-    return parse_layout(layout_str)
+    return _parse_layout(layout_str)
 
-def parse_layout(s: str) -> List[PaneArea]:
+def _parse_layout(s: str) -> List[PaneArea]:
     # First item is the layout ID which we don't need
     layout_str = s.split(",", 1)[1]
     # print(layout_str)
@@ -60,4 +63,4 @@ def parse_layout(s: str) -> List[PaneArea]:
 if __name__ == "__main__":
     # layout = subprocess.getoutput("tmux display-message -p -F '#{window_visible_layout}' -t lila:0")
     # print(parse_layout(layout))
-    print(parse_layout("be00,183x44,0,0,3"))
+    print(_parse_layout("be00,183x44,0,0,3"))
