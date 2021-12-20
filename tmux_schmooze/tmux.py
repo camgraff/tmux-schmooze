@@ -29,12 +29,9 @@ def _cmd(*args: str) -> List[str]:
     return subprocess.run(["tmux", *args], check=True, capture_output=True, text=True).stdout.splitlines()
 
 def list_targets(target_type: TargetType) -> List[Target]:
-    """
-    Returns a list of (name, id) tuples for the target type passed.
-    """
     if target_type == TargetType.WINDOW:
         partial = functools.partial(_cmd, "list-windows", "-a", "-F")
-        return [Target(name, id) for name, id in zip(partial("#{window_name}"), partial("#{window_id}"))]
+        return [Target(name, id) for name, id in zip(partial("#{session_name}: #{window_name}"), partial("#{window_id}"))]
     if target_type == TargetType.SESSION:
         partial = functools.partial(_cmd, "list-sessions", "-F")
         return [Target(name, id) for name, id in zip(partial("#{session_name}"), partial("#{session_id}"))]
