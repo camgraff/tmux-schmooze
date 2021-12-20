@@ -1,6 +1,8 @@
+from enum import Enum, auto
+import functools
 import re
 import subprocess
-from typing import List, NamedTuple
+from typing import List, NamedTuple, Tuple
 
 class PaneArea(NamedTuple):
     col_start: int
@@ -8,6 +10,36 @@ class PaneArea(NamedTuple):
     row_start: int
     row_end: int
     pane_id: str
+
+class TargetType(Enum):
+    WINDOW = auto()
+    SESSION = auto()
+
+class Target(NamedTuple):
+    """
+    A session or window
+    """
+    name: str
+    id: str
+
+def _cmd(*args: str) -> List[str]:
+    """
+    Runs a tmux shell command and returns the output as a list of lines.
+    """
+    return subprocess.run(["tmux", *args], check=True, capture_output=True, text=True).stdout.splitlines()
+
+def list_targets(target_type: TargetType) -> List[Target]:
+    """
+    Returns a list of (name, id) tuples for the target type passed.
+    """
+    if target_type == TargetType.WINDOW:
+        partial = functools.partial(_cmd, "list-windows", "-a", "-F")
+        return [Target(name, id) for name, id in zip(partial("#{window_name}"), partial("#{window_id}"))]
+    if target_type == TargetType.SESSION:
+        partial = functools.partial(_cmd, "list-sessions", "-F")
+        return [Target(name, id) for name, id in zip(partial("#{session_name}"), partial("#{session_id}"))]
+    raise ValueError(f"unknown target type: {target_type}")
+
 
 def attach_session(session: str) -> None:
     subprocess.run(["tmux", "switch-client", "-t", session], check=True)
@@ -17,7 +49,7 @@ def get_layout(id: str) -> List[PaneArea]:
     Gets the window layout for the passed id.
     id can be a session or window ID.
     """
-    layout_str = subprocess.getoutput(f"tmux display-message -p -F '#{{window_visible_layout}}' -t {id}")
+    layout_str = subprocess.getoutput(f"tmux display-message -p -F '#{{window_visible_layout}}' -t '{id}'")
     return _parse_layout(layout_str)
 
 def _parse_layout(s: str) -> List[PaneArea]:
@@ -64,3 +96,4 @@ if __name__ == "__main__":
     # layout = subprocess.getoutput("tmux display-message -p -F '#{window_visible_layout}' -t lila:0")
     # print(parse_layout(layout))
     print(_parse_layout("be00,183x44,0,0,3"))
+    print(list_targets(TargetType.SESSION))

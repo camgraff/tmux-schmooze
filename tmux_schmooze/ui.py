@@ -32,12 +32,12 @@ class InputChanged(Message):
         super().__init__(sender)
 
 class SelectedEntryChanged(Message):
-    def __init__(self, sender: MessageTarget, value: str) -> None:
+    def __init__(self, sender: MessageTarget, value: tmux.Target) -> None:
         self.value = value
         super().__init__(sender)
 
 class FuzzyFinder(DockView):
-    def __init__(self, candidates: List[str], name: str | None = None) -> None:
+    def __init__(self, candidates: List[tmux.Target], name: str | None = None) -> None:
         super().__init__(name=name)
         self.picker = Picker()
         self.input = TextInput()
@@ -48,7 +48,7 @@ class FuzzyFinder(DockView):
         await self.picker.on_key(event)
 
     async def handle_input_changed(self, event: InputChanged):
-        res = fuzzyfinder(event.value, self.candidates)
+        res = fuzzyfinder(event.value, self.candidates, accessor=lambda x : x.name)
         await self.picker.set_entries(list(res))
 
     async def on_mount(self, event: events.Mount) -> None:
@@ -62,13 +62,12 @@ class FuzzyFinder(DockView):
 class Picker(Widget):
     def __init__(self, name: str | None = None) -> None:
         super().__init__(name=name)
-        self._entries: List[str] = []
+        self._entries: List[tmux.Target] = []
         self._selected_entry_index = 0
 
     @property
-    def selected_entry(self) -> Optional[str]:
-        if self._selected_entry_index < len(self._entries):
-            return self._entries[self._selected_entry_index]
+    def selected_entry(self) -> tmux.Target:
+        return self._entries[self._selected_entry_index]
 
     async def on_key(self, event: events.Key):
         if event.key == "up":
@@ -78,19 +77,20 @@ class Picker(Widget):
             self._selected_entry_index = (self._selected_entry_index+1) % len(self._entries)
             await self.emit(SelectedEntryChanged(self, self.selected_entry))
         elif event.key == "enter":
-            tmux.attach_session(self.selected_entry)
+            tmux.attach_session(self.selected_entry.id)
 
         self.refresh()
 
-    async def set_entries(self, entries: List[str]):
+    async def set_entries(self, entries: List[tmux.Target]):
+        # TODO: Test with 0 entries, I think things will break
         self._entries = entries
         self._selected_entry_index = 0
-        await self.emit(SelectedEntryChanged(self, self._entries[self._selected_entry_index]))
+        await self.emit(SelectedEntryChanged(self, self.selected_entry))
         self.refresh()
 
     def render(self) -> RenderableType:
         # TODO: Change bgcolor to something more visisble
-        texts = [Text(x, Style(bgcolor="white") if i == self._selected_entry_index else "") for i, x in enumerate(self._entries)]
+        texts = [Text(x.name, Style(bgcolor="white") if i == self._selected_entry_index else "") for i, x in enumerate(self._entries)]
         joiner = Text("\n")
         res = joiner.join(texts)
         return Panel(res)
@@ -172,15 +172,15 @@ class PaneLayout(Layout):
         return placements
 
 class UI(App):
-    def __init__(self, target_type: str, console: Console | None = None, screen: bool = True, driver_class: Type[Driver] | None = None, log: str = "", log_verbosity: int = 1, title: str = "Textual Application"):
+    def __init__(self, target_type: tmux.TargetType, console: Console | None = None, screen: bool = True, driver_class: Type[Driver] | None = None, log: str = "", log_verbosity: int = 1, title: str = "Textual Application"):
         super().__init__(console=console, screen=screen, driver_class=driver_class, log=log, log_verbosity=log_verbosity, title=title)
-        sessions = subprocess.getoutput(f"tmux list-{target_type} -F '#S'").splitlines()
-        self.fuzzy_finder = FuzzyFinder(sessions)
+        targets = tmux.list_targets(target_type)
+        self.fuzzy_finder = FuzzyFinder(targets)
         self.panes = View(PaneLayout(0.8), name="panes")
         
     async def handle_selected_entry_changed(self, event: SelectedEntryChanged):
         self.panes.layout.reset()
-        self.set_layout(event.value)
+        self.set_layout(event.value.id)
         await self.panes.refresh_layout()
 
     def set_layout(self, id: str):
