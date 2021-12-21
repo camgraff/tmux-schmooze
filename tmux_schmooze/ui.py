@@ -32,7 +32,7 @@ class InputChanged(Message):
         super().__init__(sender)
 
 class SelectedEntryChanged(Message):
-    def __init__(self, sender: MessageTarget, value: tmux.Target) -> None:
+    def __init__(self, sender: MessageTarget, value: Optional[tmux.Target]) -> None:
         self.value = value
         super().__init__(sender)
 
@@ -66,8 +66,9 @@ class Picker(Widget):
         self._selected_entry_index = 0
 
     @property
-    def selected_entry(self) -> tmux.Target:
-        return self._entries[self._selected_entry_index]
+    def selected_entry(self) -> Optional[tmux.Target]:
+        if self._selected_entry_index < len(self._entries):
+            return self._entries[self._selected_entry_index]
 
     async def on_key(self, event: events.Key):
         if event.key == "up":
@@ -76,13 +77,12 @@ class Picker(Widget):
         elif event.key == "down":
             self._selected_entry_index = (self._selected_entry_index+1) % len(self._entries)
             await self.emit(SelectedEntryChanged(self, self.selected_entry))
-        elif event.key == "enter":
+        elif event.key == "enter" and self.selected_entry:
             tmux.attach_session(self.selected_entry.id)
 
         self.refresh()
 
     async def set_entries(self, entries: List[tmux.Target]):
-        # TODO: Test with 0 entries, I think things will break
         self._entries = entries
         self._selected_entry_index = 0
         await self.emit(SelectedEntryChanged(self, self.selected_entry))
@@ -180,7 +180,8 @@ class UI(App):
         
     async def handle_selected_entry_changed(self, event: SelectedEntryChanged):
         self.panes.layout.reset()
-        self.set_layout(event.value.id)
+        if event.value:
+            self.set_layout(event.value.id)
         # Have to refresh the view and layout for things to work properly
         self.panes.refresh(True, True)
         await self.panes.refresh_layout()
