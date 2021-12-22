@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "tmux-schmooze"
+version = "0.1.0"
+authors = ["Cam Graff <graffcameron@gmail.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.7"
+textual = "^0.1.12"
+fuzzyfinder = "^2.1.0"
+click = "^8.0.3"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

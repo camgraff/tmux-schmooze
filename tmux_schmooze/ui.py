@@ -1,4 +1,5 @@
 import string
+from click.core import Option
 from rich.control import Control
 from rich.segment import ControlType, Segment, Segments
 from textual.driver import Driver
@@ -37,7 +38,7 @@ class SelectedEntryChanged(Message):
         super().__init__(sender)
 
 class FuzzyFinder(DockView):
-    def __init__(self, candidates: List[tmux.Target], name: str | None = None) -> None:
+    def __init__(self, candidates: List[tmux.Target], name: Optional[str]=None) -> None:
         super().__init__(name=name)
         self.picker = Picker()
         self.input = TextInput()
@@ -60,7 +61,7 @@ class FuzzyFinder(DockView):
 
 
 class Picker(Widget):
-    def __init__(self, name: str | None = None) -> None:
+    def __init__(self, name: Optional[str]=None) -> None:
         super().__init__(name=name)
         self._entries: List[tmux.Target] = []
         self._selected_entry_index = 0
@@ -96,7 +97,7 @@ class Picker(Widget):
         return Panel(res)
 
 class TextInput(Widget):
-    def __init__(self, name: str | None = None) -> None:
+    def __init__(self, name: Optional[str]=None) -> None:
         super().__init__(name=name)
         self.prompt = ">> "
         self.value = ""
@@ -172,7 +173,7 @@ class PaneLayout(Layout):
         return placements
 
 class UI(App):
-    def __init__(self, target_type: tmux.TargetType, console: Console | None = None, screen: bool = True, driver_class: Type[Driver] | None = None, log: str = "", log_verbosity: int = 1, title: str = "Textual Application"):
+    def __init__(self, target_type: tmux.TargetType, console: Optional[Console]=None, screen: bool = True, driver_class: Optional[Type[Driver]]=None, log: str = "", log_verbosity: int = 1, title: str = "Textual Application"):
         super().__init__(console=console, screen=screen, driver_class=driver_class, log=log, log_verbosity=log_verbosity, title=title)
         targets = tmux.list_targets(target_type)
         self.fuzzy_finder = FuzzyFinder(targets)
