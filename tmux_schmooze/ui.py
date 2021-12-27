@@ -79,7 +79,8 @@ class Picker(Widget):
             self._selected_entry_index = (self._selected_entry_index+1) % len(self._entries)
             await self.emit(SelectedEntryChanged(self, self.selected_entry))
         elif event.key == "enter" and self.selected_entry:
-            tmux.attach_session(self.selected_entry.id)
+            tmux.attach(self.selected_entry.id)
+            await self.app.shutdown()
 
         self.refresh()
 

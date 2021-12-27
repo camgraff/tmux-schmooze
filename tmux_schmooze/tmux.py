@@ -38,8 +38,8 @@ def list_targets(target_type: TargetType) -> List[Target]:
     raise ValueError(f"unknown target type: {target_type}")
 
 
-def attach_session(session: str) -> None:
-    subprocess.run(["tmux", "switch-client", "-t", session], check=True)
+def attach(target_id: str) -> None:
+    subprocess.run(["tmux", "switch-client", "-t", target_id], check=True)
 
 def capture_pane(id: str) -> str:
     return "\n".join(_cmd("capture-pane", "-t", id, "-epN"))
