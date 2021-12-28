@@ -45,6 +45,8 @@ class FuzzyFinder(DockView):
         self.candidates = candidates
 
     async def on_key(self, event: events.Key):
+        if event.key == "escape":
+            await self.app.shutdown()
         await self.input.on_key(event)
         await self.picker.on_key(event)
 
