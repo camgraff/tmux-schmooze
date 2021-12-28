@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tmux-schmooze"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Cam Graff <graffcameron@gmail.com>"]
 description = ""
 license = "MIT"
