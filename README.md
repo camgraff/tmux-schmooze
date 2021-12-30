@@ -32,6 +32,8 @@ tmux-schmooze sessions
 ```
 Choose from a list of sessions
 
+Press `Enter` to attach to the chosen window or session.
+
 ## TODOS:
 - [ ] more configurability for entry formats
 - [ ] add mappings for deleting/renaming
