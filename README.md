@@ -34,6 +34,13 @@ Choose from a list of sessions
 
 Press `Enter` to attach to the chosen window or session.
 
+## Use in a tmux popup
+Add the following to your ~/.tmux.conf to replace the default `choose-tree` session and window picker with tmux-schmooze
+```
+bind s display-popup -E -w 80% -h 80% "~/.local/bin/tmux_schmooze sessions"
+bind w display-popup -E -w 80% -h 80% "~/.local/bin/tmux_schmooze windows"
+```
+
 ## TODOS:
 - [ ] more configurability for entry formats
 - [ ] add mappings for deleting/renaming
